@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,700;0,900;1,600;1,700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Special+Elite&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+Myanmar:wght@400;700&family=Noto+Serif+JP:wght@400;700&display=swap" rel="stylesheet">
 <style>
   :root{
     --paper: #efe4c8;
@@ -229,13 +230,45 @@
     overflow: hidden;
     margin: 0 auto 20px auto;
     border: 3px solid #c9a13f;
-}
-
-.profile-avatar img {
+  }
+  .profile-avatar img {
     width: 100%;
     height: 100%;
     object-fit: cover;
-}
+  }
+
+  /* ---------- language switcher ---------- */
+  .lang-switch{ position:fixed; top:14px; right:16px; z-index:60; font-family:'Special Elite',monospace; }
+  .lang-btn{
+    display:flex; align-items:center; gap:8px; padding:8px 14px; cursor:pointer;
+    background:var(--paper); color:var(--ink-soft); border:1px solid var(--line);
+    font:inherit; font-size:12px; letter-spacing:.1em; transition:.3s;
+  }
+  .lang-btn:hover, .lang-btn:focus-visible{ color:var(--rust); border-color:var(--rust); outline:none; }
+  .lang-btn svg{ width:15px; height:15px; }
+  .lang-menu{
+    display:none; list-style:none; position:absolute; right:0; top:calc(100% + 6px); min-width:170px;
+    background:var(--paper); border:1px solid var(--line); box-shadow:0 8px 24px rgba(36,26,16,.25);
+  }
+  .lang-switch.open .lang-menu{ display:block; }
+  .lang-menu button{
+    width:100%; text-align:left; padding:10px 16px; background:none; border:0; cursor:pointer;
+    font:inherit; font-size:13px; color:var(--ink);
+  }
+  .lang-menu button:hover, .lang-menu button.current{ background:var(--paper-2); color:var(--rust); }
+  @media(max-width:820px){
+    .lang-switch{ top:auto; bottom:16px; right:12px; }
+    .lang-menu{ top:auto; bottom:calc(100% + 6px); }
+  }
+
+  /* hide Google's default banner and widget chrome */
+  .skiptranslate iframe, .goog-te-banner-frame{ display:none !important; }
+  body{ top:0 !important; }
+  .goog-text-highlight{ background:none !important; box-shadow:none !important; }
+
+  /* fonts that can display Burmese / Japanese */
+  html:lang(my) *{ font-family:'Noto Serif Myanmar',serif !important; }
+  html:lang(ja) *{ font-family:'Noto Serif JP',serif !important; }
 </style>
 </head>
 <body>
@@ -250,6 +283,26 @@
   <a href="#cv" class="nav-link">CV</a>
 </nav>
 
+<!-- ============ LANGUAGE SWITCHER ============ -->
+<div class="lang-switch notranslate" translate="no" id="langSwitch">
+  <button class="lang-btn" id="langBtn" aria-haspopup="true" aria-expanded="false">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></svg>
+    <span id="langLabel">English</span>
+  </button>
+  <ul class="lang-menu" id="langMenu">
+    <li><button data-lang="en">English</button></li>
+    <li><button data-lang="my">မြန်မာ</button></li>
+    <li><button data-lang="ja">日本語</button></li>
+    <li><button data-lang="zh-CN">中文（简体）</button></li>
+    <li><button data-lang="ko">한국어</button></li>
+    <li><button data-lang="th">ไทย</button></li>
+    <li><button data-lang="es">Español</button></li>
+    <li><button data-lang="fr">Français</button></li>
+    <li><button data-lang="de">Deutsch</button></li>
+  </ul>
+</div>
+<div id="google_translate_element" style="display:none"></div>
+
 <!-- ============ HOME — full photo backdrop ============ -->
 <section id="home">
   <div class="hero-bg">
@@ -257,8 +310,8 @@
   </div>
   <div class="hero-content">
     <div class="profile-avatar">
-    <img src="profile2.jpg" alt="Aung Ko Ko Oo Profile Photo">
-</div>
+      <img src="profile2.jpg" alt="Aung Ko Ko Oo Profile Photo">
+    </div>
     <span class="hero-kicker">Computer Scientist &amp; Artificial Intelligence Researcher</span>
     <h1 class="hero-name">Aung Ko Ko Oo</h1>
     <div class="hero-rule"></div>
@@ -472,6 +525,7 @@
 </div>
 
 <script>
+  /* ---------- active nav link ---------- */
   const links = document.querySelectorAll('.nav-link');
   const sections = document.querySelectorAll('section');
   const io = new IntersectionObserver((entries)=>{
@@ -484,6 +538,71 @@
     });
   }, { rootMargin: '-45% 0px -50% 0px', threshold: 0 });
   sections.forEach(s=>io.observe(s));
+
+  /* ---------- translate feature ---------- */
+  // Keep names, DOIs, tech terms and nav untranslated
+  document.querySelectorAll('.hero-name, .pub-meta, .ds-stack, .skill-tags, .tag, footer small, nav')
+    .forEach(el => el.classList.add('notranslate'));
+
+  const sw = document.getElementById('langSwitch');
+  const btn = document.getElementById('langBtn');
+  const label = document.getElementById('langLabel');
+
+  function markCurrent(code){
+    document.querySelectorAll('#langMenu button').forEach(b=>{
+      const on = b.dataset.lang === code;
+      b.classList.toggle('current', on);
+      if (on) label.textContent = b.textContent;
+    });
+  }
+
+  function applyLang(code){
+    let tries = 0;
+    const t = setInterval(()=>{
+      const combo = document.querySelector('.goog-te-combo');
+      if (combo){
+        clearInterval(t);
+        combo.value = code;
+        combo.dispatchEvent(new Event('change'));
+        markCurrent(code);
+      } else if (++tries > 50) clearInterval(t);
+    }, 100);
+  }
+
+  function setLang(code){
+    try { localStorage.setItem('siteLang', code); } catch(e){}
+    if (code === 'en'){
+      const past = 'expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/';
+      document.cookie = 'googtrans=; ' + past;
+      document.cookie = 'googtrans=; ' + past + '; domain=' + location.hostname;
+      location.reload();
+    } else {
+      applyLang(code);
+    }
+  }
+
+  function googleTranslateElementInit(){
+    new google.translate.TranslateElement({
+      pageLanguage:'en',
+      includedLanguages:'my,ja,zh-CN,ko,th,es,fr,de',
+      autoDisplay:false
+    }, 'google_translate_element');
+    let saved = null;
+    try { saved = localStorage.getItem('siteLang'); } catch(e){}
+    if (saved && saved !== 'en') applyLang(saved);
+  }
+
+  btn.addEventListener('click', e=>{
+    e.stopPropagation();
+    const open = sw.classList.toggle('open');
+    btn.setAttribute('aria-expanded', open);
+  });
+  document.addEventListener('click', ()=> sw.classList.remove('open'));
+  document.querySelectorAll('#langMenu button').forEach(b=>{
+    b.addEventListener('click', ()=>{ sw.classList.remove('open'); setLang(b.dataset.lang); });
+  });
+  try { markCurrent(localStorage.getItem('siteLang') || 'en'); } catch(e){ markCurrent('en'); }
 </script>
+<script src="https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
 </body>
 </html>
